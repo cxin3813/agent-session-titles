@@ -23,7 +23,7 @@ Send the [English Agent installation instructions](AGENT_INSTALL.md#english-inst
 
 ## Install from your terminal
 
-Requires macOS or Linux, Node.js 20+, Python 3.11+, and the client command you want to use (`codex` or `claude`). Choose a target:
+Requires macOS, Linux or Windows, Node.js 20+, Python 3.11+, and the client command you want to use (`codex` or `claude`). Choose a target:
 
 ```bash
 # Auto-detect installed clients; install both when both are available.
@@ -104,3 +104,5 @@ Run only the command for the client you installed. You can remove the write-acce
 Thanks to the [LINUX DO](https://linux.do) community, where this project is shared, discussed, and improved with user feedback.
 
 Released under the [MIT License](LICENSE).
+
+Windows native adaptation is pending Windows CI and client acceptance. Run `node .\bin\agent-session-titles.cjs --both --lang en` from this checkout in PowerShell. Python is detected through `py -3`, `python`, then `python3`. Windows Codex uses SQLite synchronization; live CLI refresh through the Unix daemon socket is unavailable. Shell metacharacters in client arguments or install paths are rejected. See the Windows section in the Chinese README for the acceptance checklist.

@@ -6,6 +6,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
+const { findPython } = require("../plugins/codex-session-titles/hooks/session-title.cjs");
+
 const PRODUCT_NAME = "agent-session-titles";
 const CODEX_MARKETPLACE_NAME = PRODUCT_NAME;
 const CODEX_PLUGIN_NAME = "codex-session-titles";
@@ -149,6 +151,9 @@ function resolveConfigDirectory(configured, fallback) {
 }
 
 function commandExists(command) {
+  if (process.platform === "win32") {
+    return spawnSync("where.exe", [command], { stdio: "ignore" }).status === 0;
+  }
   const pathValue = process.env.PATH || "";
   return pathValue.split(path.delimiter).some((directory) => {
     const candidate = path.join(directory || process.cwd(), command);
@@ -317,7 +322,7 @@ function referencesLegacySessionTitleHook(value, legacyScript) {
         .replace(/\$\{CLAUDE_CONFIG_DIR\}|\$CLAUDE_CONFIG_DIR/g, path.dirname(path.dirname(legacyScript)))
         .replace(/\$\{HOME\}|\$HOME/g, os.homedir())
         .replace(/(^|[\s"'=])~(?=\/)/g, `$1${os.homedir()}`);
-      return expanded.includes(legacyScript);
+      return expanded.replaceAll("\\", "/").includes(legacyScript.replaceAll("\\", "/"));
     },
   );
 }
@@ -328,7 +333,7 @@ function referencesCodexLegacyHook(value, legacyScript, childEnv) {
       .replace(/\$\{CODEX_HOME\}|\$CODEX_HOME/g, childEnv.CODEX_HOME)
       .replace(/\$\{HOME\}|\$HOME/g, os.homedir())
       .replace(/(^|[\s"'=])~(?=\/)/g, `$1${os.homedir()}`);
-    return expanded.includes(legacyScript);
+    return expanded.replaceAll("\\", "/").includes(legacyScript.replaceAll("\\", "/"));
   });
 }
 
@@ -342,8 +347,8 @@ function isStandaloneLegacyCommand(command, scriptPath) {
     .replace(/\$\{CLAUDE_CONFIG_DIR\}|\$CLAUDE_CONFIG_DIR/g, path.dirname(path.dirname(scriptPath)))
     .replace(/\$\{HOME\}|\$HOME/g, os.homedir())
     .replace(/(^|[\s"'=])~(?=\/)/g, `$1${os.homedir()}`);
-  const escaped = scriptPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^\\s*(?:(?:/bin/)?(?:bash|sh)\\s+)?["']?${escaped}["']?\\s*$`).test(expanded);
+  const escaped = scriptPath.replaceAll("\\", "/").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\s*(?:(?:/bin/)?(?:bash|sh)\\s+)?["']?${escaped}["']?\\s*$`).test(expanded.replaceAll("\\", "/"));
 }
 
 // 旧版手工配置的桌面端即时改名钩子；插件已内置同一钩子，迁移时一并移除以免重复改名。
@@ -574,11 +579,20 @@ function outputLines(text) {
 
 // 子命令输出默认收起，只在失败时随错误展示；返回标准输出的各行
 function runCommand(command, args, env, description) {
+  // npm installs client commands as .cmd shims on Windows.
+  const windowsShim = process.platform === "win32" && ["codex", "claude"].includes(command);
+  if (windowsShim) {
+    if ([command, ...args].some((value) => /["%!^&|<>\r\n]/.test(value))) {
+      throw new Error("Windows command arguments contain unsupported shell characters.");
+    }
+    command = [command, ...args].map((value) => `"${value}"`).join(" ");
+    args = [];
+  }
   const result = spawnSync(command, args, {
     env,
     stdio: ["inherit", "pipe", "pipe"],
     encoding: "utf8",
-    shell: false,
+    shell: windowsShim,
   });
   let failure = null;
   if (result.error) {
@@ -597,7 +611,8 @@ function runCommand(command, args, env, description) {
 }
 
 function runSetupScript(script, options, env, description) {
-  for (const line of runCommand("python3", [script, ...languageArgs(options)], env, description)) {
+  const [python, ...pythonArgs] = findPython(env);
+  for (const line of runCommand(python, [...pythonArgs, script, ...languageArgs(options)], { ...env, PYTHONUTF8: "1" }, description)) {
     const home = os.homedir();
     note(line.split(home).join("~").replace(/[。.]$/, ""));
   }
@@ -997,6 +1012,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runCommand,
   copyCodexMarketplace,
   findTitleRuleConflicts,
   parseOptions,

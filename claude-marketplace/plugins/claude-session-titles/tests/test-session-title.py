@@ -61,7 +61,9 @@ class SessionTitleTests(unittest.TestCase):
         if prompt is not None:
             payload["prompt"] = prompt
         env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
         env["HOME"] = str(self.home)
+        env["USERPROFILE"] = str(self.home)
         env["CC_TITLE_DIR"] = str(self.title_dir)
         result = subprocess.run(
             [sys.executable, str(HOOK)],
@@ -221,6 +223,7 @@ class SessionTitleTests(unittest.TestCase):
         repository.mkdir()
         git_env = os.environ.copy()
         git_env["HOME"] = str(self.home)
+        git_env["USERPROFILE"] = str(self.home)
         git_env["XDG_CONFIG_HOME"] = str(self.root / "git-config")
         subprocess.run(
             ["git", "init", "-q", "-b", "main", str(repository)],

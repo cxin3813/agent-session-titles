@@ -26,7 +26,7 @@ Building | Session titles | Add bilingual support
 
 ## 自己运行命令安装
 
-需要 macOS 或 Linux、Node.js 20+、Python 3.11+，以及要使用的客户端命令 `codex` 或 `claude`。选择一条命令运行：
+需要 macOS、Linux 或 Windows、Node.js 20+、Python 3.11+，以及要使用的客户端命令 `codex` 或 `claude`。选择一条命令运行：
 
 **自动安装本机已有的客户端**（两者都有就安装两端）：
 
@@ -76,6 +76,20 @@ npx --yes github:panda-z519/agent-session-titles --remove-rules
 `--remove-rules` 同样支持 `--codex` / `--claude`，只删除标记之间的内容，并保留文件其余部分。
 
 安装器从 GitHub 读取此仓库，将插件文件复制到用户目录中的稳定位置，再调用相应客户端的插件命令。它不会在 `npm install` 阶段执行 `postinstall`。新安装的 Codex 钩子需要在 Codex 中检查并信任；随后重启对应客户端，使用新的本地会话验证。[Codex 钩子信任说明](https://learn.chatgpt.com/docs/hooks)
+
+## Windows 原生适配（待实机验收）
+
+此分支已加入原生 Windows 运行入口，无需 WSL 或 Bash。安装 Node.js 20+、Python 3.11+ 和所需客户端，确保 `node`、`py -3` 或 `python`、`codex` / `claude` 在 PATH 中可用，然后在 PowerShell 中从本地源码安装：
+
+```powershell
+node .\bin\agent-session-titles.cjs --both --lang zh
+```
+
+只安装一端时将 `--both` 改为 `--codex` 或 `--claude`。测试运行 `npm test`。Python 启动器依次检测 Windows 的 `py -3`、`python`、`python3`，并强制 UTF-8；两端钩子使用 Windows 文件锁。客户端 npm `.cmd` 入口通过 Windows shell 启动；参数或安装路径含 `" % ! ^ & | < >` 等 shell 特殊字符时安装器会拒绝执行，请换用普通路径。
+
+Windows 上 Codex 使用现有 SQLite 同步路径，暂不使用 Unix daemon socket；已打开 CLI 的即时刷新不在当前支持范围内，可重新打开会话检查标题。Claude 桌面端即时改名仍取决于客户端提供 `ccd_session_mgmt` 工具。
+
+本分支尚未完成 Windows CI 与客户端实机验收。Windows 上需核对安装及重启后的钩子加载、新会话标题、阶段更新、手动改名保护、并发会话和中文/空格路径。安装器会改动用户配置并创建原有备份，请先在测试配置或测试账号下验收。
 
 ## 安装器会修改什么
 

@@ -9,6 +9,7 @@ import os
 import socket
 import sqlite3
 import struct
+import sys
 import subprocess
 import tempfile
 import threading
@@ -18,7 +19,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-HOOK = ROOT.parent / "hooks" / "session-title.sh"
+HOOK = ROOT.parent / "hooks" / "session-title.py"
 # RFC 6455 固定值；下方测试用 RFC 示例校验，避免钩子和模拟服务端共用同一个错误常量。
 WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -171,10 +172,12 @@ class SessionTitleStateTests(unittest.TestCase):
         if source is not None:
             payload["source"] = source
         env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
         env["HOME"] = str(self.home)
+        env["USERPROFILE"] = str(self.home)
         env["CODEX_HOME"] = str(self.codex_home)
         result = subprocess.run(
-            ["bash", str(HOOK)],
+            [sys.executable, str(HOOK)],
             input=json.dumps(payload, ensure_ascii=False),
             text=True,
             capture_output=True,
@@ -477,6 +480,8 @@ class SessionTitleStateTests(unittest.TestCase):
         self.assertFalse(self.title_path(session_id).exists())
 
     def start_fake_app_server(self, fail_rename: bool = False) -> FakeAppServer:
+        if os.name == "nt":
+            self.skipTest("Unix daemon socket; Windows uses SQLite")
         # Unix 套接字路径有长度上限，实际文件放在短路径，再像 Codex 一样用符号链接指过去。
         socket_dir = Path(tempfile.mkdtemp(prefix="ast-", dir="/tmp"))
         self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(socket_dir)], check=False))

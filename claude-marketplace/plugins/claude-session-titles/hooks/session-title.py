@@ -2,7 +2,6 @@
 """通过 Claude Code 官方会话钩子安全同步三段式标题。"""
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
@@ -11,6 +10,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
+from file_lock import lock, unlock
 from typing import Any, Iterator
 
 
@@ -112,7 +112,7 @@ def acquire_session_lock(path: Path) -> Iterator[bool]:
         deadline = time.monotonic() + SESSION_LOCK_TIMEOUT_SECONDS
         while True:
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock(descriptor)
                 acquired = True
                 break
             except BlockingIOError:
@@ -125,7 +125,7 @@ def acquire_session_lock(path: Path) -> Iterator[bool]:
     finally:
         if acquired:
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_UN)
+                unlock(descriptor)
             except OSError:
                 pass
         os.close(descriptor)

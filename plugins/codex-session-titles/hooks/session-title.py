@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import fcntl
 import hashlib
 import json
 import os
@@ -17,6 +16,7 @@ import tempfile
 import time
 from contextlib import closing
 from pathlib import Path
+from file_lock import lock, unlock
 from typing import Any, TextIO
 
 DEFAULT_LANGUAGE = "zh"
@@ -240,6 +240,8 @@ class AppServerConnection:
 
 def set_thread_name_via_app_server(codex_home: Path, session_id: str, name: str) -> bool:
     """经正在运行的后台 app-server 改名，使已打开的 CLI 窗口收到 ThreadNameUpdated 通知。"""
+    if os.name == "nt":
+        return False
     # 控制套接字通常是指向短路径的符号链接；先解析，避免超出 Unix 套接字路径长度上限。
     socket_path = (codex_home / "app-server-control" / "app-server-control.sock").resolve()
     if not socket_path.exists():
@@ -383,7 +385,7 @@ def acquire_session_lock(lock_file: Path) -> TextIO | None:
         deadline = time.monotonic() + SESSION_LOCK_TIMEOUT_SECONDS
         while True:
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock(handle.fileno())
                 return handle
             except InterruptedError:
                 continue
@@ -403,7 +405,7 @@ def acquire_session_lock(lock_file: Path) -> TextIO | None:
 
 def release_session_lock(handle: TextIO) -> None:
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        unlock(handle.fileno())
     except OSError:
         pass
     try:
