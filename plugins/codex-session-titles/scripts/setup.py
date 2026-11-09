@@ -9,6 +9,7 @@ import re
 import shlex
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -270,7 +271,7 @@ def protect_state_database(codex_home: Path) -> None:
         source.close()
         source = None
 
-        with temp_path.open("rb") as snapshot_file:
+        with temp_path.open("rb+") as snapshot_file:
             os.fsync(snapshot_file.fileno())
         try:
             os.link(temp_path, backup)
@@ -292,6 +293,33 @@ def protect_state_database(codex_home: Path) -> None:
                 temp_path.unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+def ensure_windows_state_directory_access(state_dir: Path) -> None:
+    """让宿主用户读取沙箱账户创建的标题文件。"""
+    if os.name != "nt":
+        return
+    username = os.environ.get("USERNAME")
+    if not username:
+        raise SetupError("无法确定当前 Windows 用户，未修改状态目录权限。")
+    domain = os.environ.get("USERDOMAIN", ".")
+    account = f"{domain}\\{username}"
+    result = subprocess.run(
+        [
+            "icacls",
+            str(state_dir),
+            "/grant",
+            f"{account}:(OI)(CI)M",
+            "/T",
+            "/C",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise SetupError(f"无法配置状态目录权限：{detail}")
 
 
 def next_backup_path(config_file: Path) -> Path:
@@ -391,6 +419,7 @@ def run(requested_language: str | None = None) -> int:
     try:
         state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         state_dir.chmod(0o700)
+        ensure_windows_state_directory_access(state_dir)
     except OSError as exc:
         raise SetupError(f"无法创建权限为 0700 的状态目录 {state_dir}：{exc}") from exc
 
@@ -425,3 +454,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
